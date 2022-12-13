@@ -11,10 +11,11 @@ import time
 from collections import OrderedDict
 from contextlib import contextmanager, nullcontext
 from glob import glob
+from typing import Iterator, List, Optional
 
 import numpy as np
 import torch
-from cog import BasePredictor, Input, Path
+from cog import BaseModel, BasePredictor, File, Input, Path
 from einops import rearrange, repeat
 from googletrans import Translator
 from helpers import sampler_fn, save_samples
@@ -32,6 +33,10 @@ from torch import autocast
 from tqdm import tqdm, trange  # NOTE: updated for notebook
 
 
+class Output(BaseModel):
+    images: List[Path]
+    video: Optional[Path]
+    
 class Predictor(BasePredictor):
 
 
@@ -94,8 +99,7 @@ class Predictor(BasePredictor):
         init_image_strength: float = Input(
             default=0.4,
             description="How strong to apply the input image. 0 means disregard the input image mostly and 1 copies the image exactly. Values in between are interesting.")
-    ) -> Path:
-        
+    ) -> Output:
         model = 'nitrosocke'
         if init_image is not None:
             init_image = str(init_image)
@@ -134,13 +138,16 @@ class Predictor(BasePredictor):
         # calculate the frame rate of the video so that the length is always 8 seconds
         frame_rate = num_frames_per_prompt / 8
 
-        if len(glob(f"{options['outdir']}/*.png")) > 1:
-            os.system(f'ffmpeg -y -r {frame_rate} -i {options["outdir"]}/%*.png {encoding_options} /tmp/z_interpollation.mp4')
-            # time.sleep(30)
-            return Path("/tmp/z_interpollation.mp4")
-        else:
-            last_image = list(sorted(glob(f"{options['outdir']}/*.png")))[0]
-            return Path(last_image)
+
+        video=None
+        # if len(glob(f"{options['outdir']}/*.png")) > 1:
+        os.system(f'ffmpeg -y -r {frame_rate} -i {options["outdir"]}/%*.png {encoding_options} /tmp/z_interpollation.mp4')
+        # time.sleep(30)
+        video = Path("/tmp/z_interpollation.mp4")
+        # else:
+        images = [Path(image) for image in list(sorted(glob(f"{options['outdir']}/*.png")))]
+        
+        return Output(images=images, video=video)
 
 
 
